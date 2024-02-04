@@ -227,7 +227,7 @@ func main() {
 	flag.IntVar(&pos, "pos", 0, "position of cursor")
 	flag.BoolVar(&debug, "debug", false, "enable debug log")
 	flag.StringVar(&errMsg, "message", "err", "choose a custom error message")
-	flag.BoolVar(&returnOnly, "retrn", false, "only return generate")
+	flag.BoolVar(&returnOnly, "return", false, "only return generate")
 	flag.Parse()
 	if debug {
 		dbgLog = log.New(os.Stderr, "D ", 0)
