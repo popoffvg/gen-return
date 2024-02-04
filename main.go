@@ -13,7 +13,10 @@ import (
 	"strings"
 )
 
-const noname = "(no name)"
+const (
+	errBegin = "if err != nil {\n\t"
+	noname   = "(no name)"
+)
 
 var dbgLog *log.Logger
 
@@ -127,13 +130,17 @@ func typeString(x ast.Expr) string {
 	return ""
 }
 
-func writeIferr(w io.Writer, types []ast.Expr, errMsg string) error {
+func writeIferr(w io.Writer, types []ast.Expr, errMsg string, returnOnly bool) error {
 	if len(types) == 0 {
 		_, err := fmt.Fprint(w, "if err != nil {\n\treturn\n}\n")
 		return err
 	}
 	bb := &bytes.Buffer{}
-	bb.WriteString("if err != nil {\n\treturn ")
+	begin := ""
+	if !returnOnly {
+		begin = errBegin
+	}
+	bb.WriteString(begin + "return ")
 	for i, t := range types {
 		if i > 0 {
 			bb.WriteString(", ")
@@ -177,7 +184,7 @@ func writeIferr(w io.Writer, types []ast.Expr, errMsg string) error {
 			continue
 		}
 		// treat it as an interface when type name has "."
-		if strings.Index(ts, ".") >= 0 {
+		if strings.Contains(ts, ".") {
 			bb.WriteString("nil")
 			continue
 		}
@@ -185,12 +192,14 @@ func writeIferr(w io.Writer, types []ast.Expr, errMsg string) error {
 		bb.WriteString(ts)
 		bb.WriteString("{}")
 	}
-	bb.WriteString("\n}\n")
+	if !returnOnly {
+		bb.WriteString("\n}\n")
+	}
 	io.Copy(w, bb)
 	return nil
 }
 
-func iferr(w io.Writer, r io.Reader, pos int, errMsg string) error {
+func iferr(w io.Writer, r io.Reader, pos int, errMsg string, returnOnly bool) error {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "iferr.go", r, 0)
 	if err != nil {
@@ -205,23 +214,25 @@ func iferr(w io.Writer, r io.Reader, pos int, errMsg string) error {
 		return fmt.Errorf("no functions at %d", pos)
 	}
 	types := toTypes(v.ft.Results)
-	return writeIferr(w, types, errMsg)
+	return writeIferr(w, types, errMsg, returnOnly)
 }
 
 func main() {
 	var (
-		pos    int
-		debug  bool
-		errMsg string
+		pos        int
+		debug      bool
+		errMsg     string
+		returnOnly bool
 	)
 	flag.IntVar(&pos, "pos", 0, "position of cursor")
 	flag.BoolVar(&debug, "debug", false, "enable debug log")
 	flag.StringVar(&errMsg, "message", "err", "choose a custom error message")
+	flag.BoolVar(&returnOnly, "retrn", false, "only return generate")
 	flag.Parse()
 	if debug {
 		dbgLog = log.New(os.Stderr, "D ", 0)
 	}
-	err := iferr(os.Stdout, os.Stdin, pos, errMsg)
+	err := iferr(os.Stdout, os.Stdin, pos, errMsg, returnOnly)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
